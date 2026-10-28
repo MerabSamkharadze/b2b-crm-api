@@ -1,0 +1,41 @@
+// ============================================================================
+//  Prisma Schema — B2B CRM
+//  ეს ფაილი არის single source of truth ბაზის სტრუქტურისთვის:
+//    `prisma migrate dev`  → ადარებს ამ ფაილს ბაზას და SQL migration-ს აგენერირებს
+//    `prisma generate`     → აგენერირებს ტიპიზებულ Prisma Client-ს (TypeScript კოდს)
+// ============================================================================
+
+generator client {
+  // ── Mechanism: Prisma 7-ში generator-ის provider შეიცვალა.
+  // ძველი `prisma-client-js` deprecated-ია. ახალი `prisma-client` **TypeScript
+  // source**-ს წერს `output` ფოლდერში — node_modules-ში აღარ იმალება, რაც
+  // ნიშნავს რომ generated კოდი შენს tsc build-ში შედის (ამიტომ src/-ის ქვეშ დევს).
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+
+  // runtime — სად გაეშვება client-ი. ჩვენი target არის Node.js server.
+  runtime = "nodejs"
+
+  // moduleFormat — "esm", რადგან package.json-ში `"type": "module"` წერია
+  // (NestJS 12-ის default). CommonJS პროექტში აქ "cjs" იწერება.
+  moduleFormat = "esm"
+
+  // importFileExtension — ESM + nodenext მოითხოვს relative import-ებში ფაილის
+  // გაფართოებას (`./client.js`), ამიტომ generated კოდმაც "js" უნდა გამოიყენოს.
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+
+  // ── Mechanism: Prisma 7-ში `url` აქ **აკრძალულია** (P1012 error-ს იძლევა).
+  // კავშირის მისამართი ორ ადგილას გადავინაწილეთ:
+  //   1. CLI/Migrate   → prisma.config.ts → datasource.url
+  //   2. Runtime client → driver adapter (@prisma/adapter-pg), იხ. prisma.service.ts
+  // მიზეზი: Prisma 7-მა Rust query engine წაშალა; queries ახლა JS driver-ით
+  // (node-postgres) მიდის, ამიტომ connection-ს აპლიკაცია თავად აწვდის.
+}
+
+// ── მოდელები Step 1-ში დაემატება. ახლა მიზანია "walking skeleton":
+// დავამტკიცოთ რომ Controller → Service → Prisma → PostgreSQL ჯაჭვი მუშაობს,
+// სანამ ექვს entity-ს დავამოდელირებთ. იხ. GET /api/health
