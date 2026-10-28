@@ -7,7 +7,11 @@
  * იმუშავებდა — ანუ ტესტი **სხვა** აპლიკაციას შეამოწმებდა, ვიდრე production-ში
  * გაშვებული. ასეთი განსხვავება ყველაზე მოღალატე bug-ების წყაროა.
  */
-import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  VersioningType,
+} from '@nestjs/common';
 import helmet from 'helmet';
 
 export function configureApp(app: INestApplication): void {

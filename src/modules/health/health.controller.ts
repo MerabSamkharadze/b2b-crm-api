@@ -16,9 +16,15 @@ import {
   VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public } from '../auth/decorators/public.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @ApiTags('health')
+// ── Mechanism: @Public() — JwtAuthGuard გლობალურად არის რეგისტრირებული,
+// ანუ **ყველაფერი დაცულია by default**. health check-ს token არ უნდა
+// სჭირდებოდეს: მას load balancer და monitoring კითხავს, რომლებსაც
+// ანგარიში არ აქვთ. ამ დეკორატორის გარეშე endpoint 401-ს აბრუნებს.
+@Public()
 // ── Mechanism: version: VERSION_NEUTRAL ნიშნავს, რომ ეს route ყველა ვერსიაზე
 // პასუხობს — /api/health (და არა /api/v1/health). Health check-ი API-ის
 // კონტრაქტის ნაწილი არ არის, ამიტომ ვერსიონირებას არ ექვემდებარება.
