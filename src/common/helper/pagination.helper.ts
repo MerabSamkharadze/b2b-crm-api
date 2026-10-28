@@ -41,6 +41,7 @@ export interface Paginated<T> {
  * ამჟამინდელი stub: ყოველთვის პირველი 20 ჩანაწერი (ანუ "?page=2" იგივე
  * შედეგს აბრუნებს, რასაც "?page=1") — აპლიკაცია მუშაობს, უბრალოდ გვერდები არა.
  */
+// oxlint-disable-next-line no-unused-vars -- `query` სავარჯიშო #01-ში გამოიყენება
 export function toSkipTake(query: PaginationQueryDto): {
   skip: number;
   take: number;

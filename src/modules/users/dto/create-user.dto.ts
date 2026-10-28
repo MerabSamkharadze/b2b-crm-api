@@ -6,7 +6,7 @@
  * ემსახურებოდა, ნებისმიერი სტუმარი `{"role": "ADMIN"}`-ით დარეგისტრირდებოდა.
  * ამ ხარვეზს "mass assignment / privilege escalation" ჰქვია.
  */
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsEnum,

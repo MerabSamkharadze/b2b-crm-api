@@ -15,7 +15,12 @@ import { ThrottlerModule, minutes } from '@nestjs/throttler';
 import { validateEnv } from './common/config/env.validation.js';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
+import { ActivitiesModule } from './modules/activities/activities.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { CompaniesModule } from './modules/companies/companies.module.js';
+import { ContactsModule } from './modules/contacts/contacts.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { DealsModule } from './modules/deals/deals.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './modules/auth/guards/roles.guard.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -40,6 +45,13 @@ import { UsersModule } from './modules/users/users.module.js';
     HealthModule,
     AuthModule,
     UsersModule,
+
+    // CRM-ის feature module-ები
+    CompaniesModule,
+    ContactsModule,
+    DealsModule,
+    ActivitiesModule,
+    DashboardModule,
   ],
 
   providers: [

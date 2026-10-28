@@ -275,6 +275,7 @@ export class UsersService {
    * DONE WHEN: seed-ის მენეჯერით შესვლისას `GET /api/v1/companies` აჩვენებს
    *            გუნდის კომპანიებსაც (და არა მხოლოდ საკუთარს)
    */
+  // oxlint-disable-next-line no-unused-vars -- `userId` სავარჯიშო #08-ში გამოიყენება
   async findSubordinateIds(userId: string): Promise<string[]> {
     return [];
   }

@@ -17,6 +17,7 @@
  * @see docs/EXERCISES.md — სავარჯიშო #04
  */
 import type { AuthUser } from './auth-user.js';
+// oxlint-disable-next-line no-unused-vars -- სავარჯიშო #04-ისთვის წინასწარ იმპორტირებული
 import { Role } from '../../prisma-client.js';
 
 /**

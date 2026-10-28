@@ -13,6 +13,7 @@
  *      (იხ. USER_SAFE_SELECT) — "რაც არ წაგიკითხავს, ვერ გაჟონავს"
  *   2. დამატებითი: ეს DTO, რომელიც response-ის ფორმას განსაზღვრავს
  */
+// oxlint-disable-next-line no-unused-vars -- Expose სავარჯიშო #11-ისთვისაა
 import { Exclude, Expose } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../../../prisma-client.js';
@@ -50,7 +51,7 @@ export class UserResponseDto {
   hashedRefreshToken?: string;
 
   /**
-   * TODO: [Merab] #10 — Response-ის სერიალიზაცია
+   * TODO: [Merab] #11 — Response-ის სერიალიზაცია
    *
    * GOAL:      დააბრუნე UserResponseDto-ს **instance** (და არა plain object),
    *            `plainToInstance`-ის გამოყენებით, + დაამატე computed ველი
