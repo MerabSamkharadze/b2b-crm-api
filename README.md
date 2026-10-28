@@ -1,133 +1,186 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# B2B CRM API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+სასწავლო პროექტი enterprise-დონის backend არქიტექტურის ასათვისებლად:
+**NestJS 12 + Prisma 7 + PostgreSQL 16 + JWT/RBAC**.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+კოდი დეტალურად დაკომენტარებულია (რა, რატომ და როგორ მუშაობს), ხოლო
+12 ადგილი შეგნებულად დაუსრულებელია — ისინი შენი სავარჯიშოებია.
 
-## Description
+📖 **დოკუმენტაცია**
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — request-ის გზა, module-ების გრაფი, RBAC, schema-ს ლოგიკა
+- [`docs/EXERCISES.md`](docs/EXERCISES.md) — 12 სავარჯიშო, რეკომენდებული რიგითობა
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — 12 არქიტექტურული გადაწყვეტილება (და რა უარვყავით)
 
-## Project setup
+---
+
+## 1. გაშვება
+
+### ნაბიჯი 1 — PostgreSQL-ის ჩართვა
+
+PostgreSQL 16 უკვე დაინსტალირებულია (`/Library/PostgreSQL/16`, EDB installer),
+მაგრამ სერვისი შეიძლება გამორთული იყოს:
 
 ```bash
-$ npm install
+sudo launchctl bootstrap system /Library/LaunchDaemons/postgresql-16.plist
+/Library/PostgreSQL/16/bin/pg_isready -h localhost -p 5432   # → accepting connections
 ```
 
-## Compile and run the project
+გამორთვა: `sudo launchctl bootout system/postgresql-16`
+
+### ნაბიჯი 2 — ბაზისა და როლის შექმნა
+
+პაროლი `.env`-შია (git-ში არ ხვდება). ქვემოთ ბრძანება მას პირდაპირ
+`.env`-იდან იღებს, ანუ არსად არ გჭირდება ხელით კოპირება:
 
 ```bash
-# development
-$ npm run start
+PW=$(grep '^DATABASE_URL' .env | sed -E 's|.*crm_user:([^@]+)@.*|\1|')
 
-# watch mode
-$ npm run start:dev
+/Library/PostgreSQL/16/bin/psql -U postgres -h localhost \
+  -c "CREATE ROLE crm_user LOGIN CREATEDB PASSWORD '$PW';"
 
-# production mode
-$ npm run start:prod
+/Library/PostgreSQL/16/bin/createdb -U postgres -h localhost -O crm_user crm_db
 ```
 
-## Run tests
+⚠️ `CREATEDB` უფლება **აუცილებელია**: `prisma migrate dev` დროებით
+"shadow database"-ს ქმნის, რომ migration-ის სისწორე შეადაროს schema-ს.
+ამის გარეშე migration ჩავარდება.
+
+ორივე ბრძანება `postgres`-ის პაროლს მოგთხოვთ (იგივე, რაც installer-ში მიუთითეთ).
+
+### ნაბიჯი 3 — migration, seed და გაშვება
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install          # postinstall ავტომატურად აკეთებს `prisma generate`
+npm run db:migrate   # migration + generate
+npm run db:seed      # საცდელი მონაცემები
+npm run start:dev
 ```
 
-## Deployment
+გაიხსენი:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- **API** — http://localhost:3000/api/v1
+- **Swagger** — http://localhost:3000/api/docs ← აქედან ტესტირება ყველაზე მოსახერხებელია
+- **Health** — http://localhost:3000/api/health
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+---
+
+## 2. საცდელი მომხმარებლები
+
+პაროლი ყველასთვის: `Password123!`
+
+| email              | როლი      | რას ფლობს                       |
+| ------------------ | --------- | ------------------------------- |
+| `admin@crm.test`   | ADMIN     | — (ყველაფერს ხედავს)            |
+| `manager@crm.test` | MANAGER   | Initech; გუნდი: rep1 + rep2     |
+| `rep1@crm.test`    | SALES_REP | Acme (4 გარიგება)               |
+| `rep2@crm.test`    | SALES_REP | Globex (3 გარიგება)             |
+| `lone@crm.test`    | SALES_REP | Umbrella — **მენეჯერის გარეშე** |
+
+`lone@crm.test` სპეციალურად არსებობს: მისი ჩანაწერები მენეჯერს
+**არასდროს** უნდა უჩანდეს. ეს შენი role-scope ლოგიკის "negative test"-ია.
+
+### Swagger-ში ავტორიზაცია
+
+1. `POST /api/v1/auth/login` → დააკოპირე `accessToken`
+2. ზევით **Authorize** ღილაკი → ჩასვი token-ი
+3. ყველა დაცული endpoint ხელმისაწვდომია
+
+---
+
+## 3. ბრძანებები
+
+| ბრძანება             | რას აკეთებს                                                |
+| -------------------- | ---------------------------------------------------------- |
+| `npm run start:dev`  | watch რეჟიმში გაშვება                                      |
+| `npm run build`      | TypeScript-ის კომპილაცია                                   |
+| `npm run lint`       | oxlint (type-aware)                                        |
+| `npm test`           | unit ტესტები (vitest)                                      |
+| `npm run test:watch` | watch რეჟიმი — **სავარჯიშოებზე მუშაობისას ეს გამოიყენე**   |
+| `npm run test:e2e`   | e2e ტესტები (სჭირდება გაშვებული ბაზა)                      |
+| `npm run todos`      | ყველა სავარჯიშოს სია კოდიდან                               |
+| `npm run db:migrate` | `prisma migrate dev` + `generate`                          |
+| `npm run db:seed`    | საცდელი მონაცემები                                         |
+| `npm run db:reset`   | ბაზის სრული გასუფთავება + migration-ების ხელახალი გატარება |
+| `npm run db:studio`  | Prisma Studio — ბაზის ვიზუალური დათვალიერება               |
+
+---
+
+## 4. სტრუქტურა
+
+```
+prisma/
+  schema.prisma         ბაზის სტრუქტურა (single source of truth)
+  seed.ts               საცდელი მონაცემები
+prisma.config.ts        Prisma 7-ის CLI კონფიგურაცია
+src/
+  main.ts               bootstrap + Swagger
+  app.module.ts         root module, გლობალური guard/filter/interceptor
+  prisma-client.ts      generated client-ის barrel (ერთადერთი შესასვლელი)
+  generated/prisma/     ⚙️ generated (gitignore) — `npm run postinstall`
+  common/
+    authorization/      ⭐ ownerScope — row-level ავტორიზაცია
+    config/             env-ის ვალიდაცია, configureApp
+    dto/ helper/        pagination
+    filters/            Prisma-ს შეცდომები → HTTP სტატუსები
+    interceptors/       request-id + ხანგრძლივობა
+  modules/
+    prisma/             PrismaService (@Global)
+    health/             GET /api/health
+    auth/               JWT strategy, guards, decorators
+    users/ companies/ contacts/ deals/ activities/ dashboard/
+test/
+  auth.e2e-spec.ts      HTTP-ის დონის smoke ტესტი
+docs/                   ARCHITECTURE / EXERCISES / DECISIONS
+```
+
+---
+
+## 5. სავარჯიშოებზე მუშაობა
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run todos        # სად რა დარჩა
+npm run test:watch   # ტესტები watch რეჟიმში
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+ყოველ სავარჯიშოს ტესტი **წინასწარ დაწერილია** და `describe.skip`-ით
+გამორთული. პროცესი:
 
-## Observability
+1. წაიკითხე `.spec.ts` ფაილი — ის ზუსტი სპეციფიკაციაა
+2. წაშალე `.skip`
+3. დაწერე კოდი, სანამ მწვანე არ გახდება
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+დაწყება: **#01** (გასათბობი) → **#04** (ყველაზე მნიშვნელოვანი).
+სრული რიგითობა: [`docs/EXERCISES.md`](docs/EXERCISES.md).
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+---
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+## 6. ხშირი პრობლემები
 
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
+| სიმპტომი                                            | მიზეზი და გამოსავალი                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| `Can't reach database server`                       | სერვისი გამორთულია → ნაბიჯი 1                                      |
+| `P1012: url is no longer supported`                 | Prisma 7-ში `url` schema-ში აკრძალულია — ის `prisma.config.ts`-შია |
+| `permission denied to create database`              | `crm_user`-ს `CREATEDB` არ აქვს → `ALTER ROLE crm_user CREATEDB;`  |
+| `Cannot find module './generated/prisma/client.js'` | `npx prisma generate` (ან `npm install`)                           |
+| `npm i prisma` აყენებს 8.0.0-rc-ს                   | ვერსიები `--save-exact`-ით არის pin-ული — არ მოხსნა                |
+| 403 ყველგან ADMIN-ითაც                              | ეს ნორმაა სავარჯიშო #03-მდე (role იერარქია ჯერ არ არის)            |
+| ყველა როლი ერთსა და იმავეს ხედავს                   | ეს ნორმაა სავარჯიშო #04-მდე (fail-closed stub)                     |
+| 501 Not Implemented                                 | შეგნებული stub — იხ. `docs/EXERCISES.md`                           |
 
-```bash
-$ npx @nestjs/observe link
-```
+---
 
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
+## 7. სტეკი
 
-Or do it by hand:
+|            | ვერსია   | რატომ                                                                    |
+| ---------- | -------- | ------------------------------------------------------------------------ |
+| NestJS     | 12.3.2   | ESM + vitest + oxlint — ამ ვერსიის default scaffold                      |
+| Prisma     | 7.10.1   | driver adapter (Rust engine-ის გარეშე), `prisma-client` generator        |
+| PostgreSQL | 16.4     | ლოკალურად დაინსტალირებული (EDB)                                          |
+| TypeScript | 6.0.3    | `experimentalDecorators` + `emitDecoratorMetadata` (DI-სთვის აუცილებელი) |
+| ტესტები    | vitest 4 | NestJS 12-ის default (Jest-ის ნაცვლად)                                   |
+| Linter     | oxlint   | NestJS 12-ის default (ESLint-ის ნაცვლად)                                 |
 
-```bash
-$ npm install @nestjs/observe
-```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# b2b-crm-api
+⚠️ **ESM-ის შედეგი:** ყველა relative import-ს სჭირდება `.js` გაფართოება
+(`./auth.service.js`), თუნდაც TypeScript ფაილისთვის. ეს Node.js-ის ESM
+სპეციფიკაციის მოთხოვნაა და არა NestJS-ის კაპრიზი.
