@@ -3,6 +3,8 @@
 //  ეს ფაილი არის single source of truth ბაზის სტრუქტურისთვის:
 //    `prisma migrate dev`  → ადარებს ამ ფაილს ბაზას და SQL migration-ს აგენერირებს
 //    `prisma generate`     → აგენერირებს ტიპიზებულ Prisma Client-ს (TypeScript კოდს)
+//
+//  რელაციური დიზაინის ლოგიკა დეტალურად: docs/ARCHITECTURE.md#schema
 // ============================================================================
 
 generator client {
@@ -36,6 +38,300 @@ datasource db {
   // (node-postgres) მიდის, ამიტომ connection-ს აპლიკაცია თავად აწვდის.
 }
 
-// ── მოდელები Step 1-ში დაემატება. ახლა მიზანია "walking skeleton":
-// დავამტკიცოთ რომ Controller → Service → Prisma → PostgreSQL ჯაჭვი მუშაობს,
-// სანამ ექვს entity-ს დავამოდელირებთ. იხ. GET /api/health
+// ============================================================================
+//  ENUMS
+//  WHY enum და არა ცალკე ცხრილი: ეს მნიშვნელობები კოდის ლოგიკის ნაწილია
+//  (RolesGuard-ი Role-ზე წყვეტს, pipeline-ის წესები DealStage-ზე). PostgreSQL-ში
+//  ნამდვილი enum ტიპი იქმნება, ანუ ბაზაც იცავს მთლიანობას.
+//  ⚠️ ფასი: enum-ის მნიშვნელობის წაშლა/გადარქმევა მრავალსაფეხურიან
+//  migration-ს მოითხოვს. როდის ჯობია ცხრილი — docs/DECISIONS.md
+// ============================================================================
+
+enum Role {
+  ADMIN // ყველაფერს ხედავს და ცვლის
+  MANAGER // ხედავს თავისსა და თავისი გუნდის ჩანაწერებს
+  SALES_REP // ხედავს მხოლოდ საკუთარს
+}
+
+enum CompanyStatus {
+  LEAD // პოტენციური კლიენტი, ჯერ არაფასდასადები
+  PROSPECT // კვალიფიციური, მიმდინარეობს მოლაპარაკება
+  CUSTOMER // მოქმედი კლიენტი
+  CHURNED // დაკარგული კლიენტი
+}
+
+enum DealStage {
+  LEAD
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON // ტერმინალური
+  LOST // ტერმინალური
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+  TASK
+}
+
+// ============================================================================
+//  USER — სისტემის მომხმარებელი (გამყიდველი, მენეჯერი, ადმინი)
+// ============================================================================
+
+model User {
+  // ── Mechanism: uuid(7) — დროზე დალაგებადი UUID. ჩვეულებრივი uuid(4)
+  // შემთხვევითია, ამიტომ ახალი ჩანაწერები B-tree index-ში შემთხვევით ადგილას
+  // ჯდება და index ფრაგმენტირდება. v7-ის პრეფიქსი timestamp-ია → ჩანაწერები
+  // ბოლოში ჯდება, insert-ები უფრო სწრაფია.
+  id String @id @default(uuid(7))
+
+  // email ყოველთვის lowercase-ად ინახება (იხ. DTO-ების @Transform).
+  // ⚠️ PostgreSQL-ის @unique **case-sensitive**-ია: "A@b.com" და "a@b.com"
+  // ორი სხვადასხვა ჩანაწერია. ამიტომ ნორმალიზება აპლიკაციის პასუხისმგებლობაა.
+  email String @unique
+
+  // bcrypt hash — არასდროს plaintext. სიგრძე ყოველთვის 60 სიმბოლოა.
+  password String
+
+  firstName String
+  lastName  String
+  role      Role   @default(SALES_REP)
+
+  // WHY soft-deactivate და არა წაშლა: მომხმარებელს ეკუთვნის კომპანიები და
+  // გარიგებები (onDelete: Restrict ქვემოთ), ანუ ფიზიკური წაშლა ისედაც დაიბლოკება.
+  // isActive=false ართმევს წვდომას, ისტორიას კი ხელს არ ახლებს.
+  isActive Boolean @default(true)
+
+  // refresh token-ის hash (არა თავად token!). ახლა გამოუყენებელია —
+  // ეს ველი სავარჯიშო #09-ისთვისაა მომზადებული.
+  hashedRefreshToken String?
+
+  // ── Mechanism: self-relation. ერთი სვეტი (managerId) აღწერს გუნდურ
+  // იერარქიას, ანუ "MANAGER ხედავს თავისი გუნდის ჩანაწერებს" ერთ query-ით იწერება.
+  // onDelete: SetNull — მენეჯერის წაშლა არ უნდა დაბლოკოს ან დააქციოს ქვეშევრდომები.
+  // ⚠️ ბაზა ციკლს (A→B→A) ვერ აკრძალავს — ეს service-ის საქმეა (სავარჯიშო #08).
+  managerId    String?
+  manager      User?   @relation("TeamHierarchy", fields: [managerId], references: [id], onDelete: SetNull)
+  subordinates User[]  @relation("TeamHierarchy")
+
+  ownedCompanies   Company[]
+  ownedContacts    Contact[]
+  ownedDeals       Deal[]
+  activities       Activity[]
+  dealStageChanges DealStageHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // ❗️ `role`-ზე index შეგნებულად **არ** გვაქვს: მას სულ 3 განსხვავებული
+  // მნიშვნელობა აქვს (დაბალი selectivity), ასეთ სვეტზე PostgreSQL index-ს
+  // მაინც არ გამოიყენებს — ცხრილის სრული წაკითხვა უფრო იაფი უჯდება.
+
+  // ── Mechanism: **Prisma PostgreSQL-ზე foreign key-ებზე index-ს ავტომატურად
+  // არ აკეთებს** (MySQL-ზე აკეთებს). ანუ ყველა FK, რომლითაც ვფილტრავთ,
+  // ხელით უნდა დავაინდექსოთ — თორემ ყოველი "ჩემი გუნდის" query seq scan-ია.
+  @@index([managerId])
+}
+
+// ============================================================================
+//  COMPANY — B2B CRM-ის ცენტრალური entity (კლიენტი-ორგანიზაცია)
+// ============================================================================
+
+model Company {
+  id String @id @default(uuid(7))
+
+  name String
+
+  // domain არის ბუნებრივი unique key B2B-ში ("acme.com").
+  // optional-ია, რადგან lead-ზე ხშირად ჯერ მხოლოდ სახელი ვიცით.
+  domain   String? @unique
+  industry String?
+  size     Int? // თანამშრომლების რაოდენობა
+
+  status CompanyStatus @default(LEAD)
+
+  // ── Mechanism: onDelete: Restrict — მომხმარებლის წაშლა დაიბლოკება, სანამ
+  // მას კომპანიები ეკუთვნის. WHY: CRM-ში "ვის ეკუთვნის კლიენტი" ფინანსური
+  // ინფორმაციაა; ჯერ სხვას უნდა გადაეწეროს (reassign), მერე წაშლა.
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  contacts   Contact[]
+  deals      Deal[]
+  activities Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+// ============================================================================
+//  CONTACT — კონკრეტული ადამიანი კომპანიაში
+// ============================================================================
+
+model Contact {
+  id String @id @default(uuid(7))
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  position  String? // თანამდებობა ("CTO")
+
+  // ── Mechanism: onDelete: Cascade — კონტაქტი კომპანიის გარეშე აზრს კარგავს,
+  // ამიტომ კომპანიის წაშლა თან წაიყვანს კონტაქტებს.
+  // ⚠️ შეადარე Deal-ს, სადაც Restrict გვიწერია — ასიმეტრია შეგნებულია:
+  // კონტაქტი აღწერს აწმყოს, გარიგება კი ფინანსურ ისტორიას.
+  // პრაქტიკაში ეს Cascade მხოლოდ მაშინ გაირთვება, როცა კომპანიას გარიგება არ აქვს.
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  deals      Deal[]
+  activities Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Mechanism: unique **კომპანიის ფარგლებში**, და არა გლობალურად.
+  // WHY: ერთი და იგივე ადამიანი შეიძლება ორი კომპანიის კონტაქტი იყოს
+  // (სამსახური შეიცვალა, კონსულტანტია). გლობალური @unique ამას დაბლოკავდა.
+  // ⚠️ PostgreSQL-ში NULL-ები unique index-ში ერთმანეთს არ ეჯახება, ანუ
+  // email-ის გარეშე კონტაქტები თავისუფლად ემატება.
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([ownerId])
+}
+
+// ============================================================================
+//  DEAL — გარიგება (pipeline-ის ერთეული)
+// ============================================================================
+
+model Deal {
+  id String @id @default(uuid(7))
+
+  title String
+
+  // ── Mechanism: Decimal და **არასდროს** Float ფულისთვის.
+  // Float ორობითი წილადია: 0.1 + 0.2 === 0.30000000000000004. ასეთი ცდომილება
+  // ფინანსურ ანგარიშში დაუშვებელია. Decimal(12,2) = 10 ციფრი + 2 ათწილადი.
+  amount Decimal @db.Decimal(12, 2)
+
+  // ერთვალუტიანი სისტემაა, მაგრამ ველი ახლავე გვაქვს: მერე დამატება
+  // არსებული მონაცემების migration-ს მოითხოვს.
+  currency String @default("USD")
+
+  stage DealStage @default(LEAD)
+
+  // დახურვის ალბათობა პროცენტებში (0-100) — weighted forecast-ისთვის.
+  probability Int @default(0)
+
+  expectedCloseDate DateTime?
+  closedAt          DateTime? // ივსება მხოლოდ WON/LOST-ზე (სავარჯიშო #07)
+  lostReason        String? // სავალდებულო LOST-ზე, აკრძალული WON-ზე
+
+  // ── Mechanism: Restrict — კომპანიის წაშლა დაიბლოკება, სანამ გარიგებები აქვს.
+  // WHY: შემოსავლის ისტორია კომპანიის "დასუფთავებას" უნდა გადაურჩეს.
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  // ── Mechanism: SetNull — კონტაქტმა სამსახური შეიცვალა, გარიგება რჩება.
+  // ⚠️ Prisma მოითხოვს, რომ SetNull-ისთვის scalar ველი optional იყოს (String?).
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  stageHistory DealStageHistory[]
+  activities   Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // composite index: ყველაზე ხშირი query არის "ჩემი გარიგებები ამ ეტაპზე".
+  // სვეტების რიგი მნიშვნელოვანია — ownerId პირველია, რადგან მასზე ყოველთვის
+  // ვფილტრავთ (role scope), stage კი ხანდახან.
+  @@index([ownerId, stage])
+  @@index([companyId])
+  @@index([expectedCloseDate])
+}
+
+// ============================================================================
+//  DEAL STAGE HISTORY — pipeline-ის აუდიტის კვალი
+//  WHY ცალკე ცხრილი: Deal.stage მხოლოდ **აწმყოს** ინახავს. "რამდენ ხანს
+//  იდგა გარიგება NEGOTIATION-ზე" ან "ვინ დახურა" — ამ ცხრილის გარეშე პასუხი არ აქვს.
+// ============================================================================
+
+model DealStageHistory {
+  id String @id @default(uuid(7))
+
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // ── Mechanism: fromStage nullable-ია, რადგან გარიგების შექმნა თავისთავად
+  // გადასვლაა null → LEAD. ასე ისტორია სრულია და "დაბადების" ჩანაწერიც აქვს.
+  fromStage DealStage?
+  toStage   DealStage
+
+  changedById String
+  changedBy   User   @relation(fields: [changedById], references: [id], onDelete: Restrict)
+
+  note String?
+
+  changedAt DateTime @default(now())
+
+  // ისტორიას ყოველთვის ერთი გარიგებისთვის, დროის მიხედვით ვკითხულობთ.
+  @@index([dealId, changedAt])
+}
+
+// ============================================================================
+//  ACTIVITY — ზარი / შეხვედრა / დავალება (CRM-ის "დღიური")
+// ============================================================================
+
+model Activity {
+  id String @id @default(uuid(7))
+
+  type    ActivityType
+  subject String
+  notes   String?
+
+  dueAt       DateTime? // დაგეგმილი დრო (TASK/MEETING)
+  completedAt DateTime? // null = ჯერ შესრულებული არაა
+
+  // ── Mechanism: ownerId (და არა userId) — სახელი შეგნებულად იგივეა, რაც
+  // Company/Contact/Deal-ზე. ასე role-scope ფილტრი ერთი სუფთა ფუნქციაა
+  // ყველა entity-სთვის და არა ოთხი ვარიაცია. იხ. common/authorization/
+  //
+  // Restrict: აუდიტის ჩანაწერი ავტორის წაშლასთან ერთად არ უნდა გაქრეს.
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  // აქტივობა მიბმულია **სურვილისამებრ** კომპანიაზე, კონტაქტზე ან გარიგებაზე.
+  // ყველა Cascade-ია: მშობლის წაშლისას დღიურის ჩანაწერიც აზრს კარგავს.
+  // ⚠️ არსებული ხარვეზი: ბაზა არ ითხოვს, რომ სულ ცოტა ერთი მშობელი იყოს
+  // მითითებული — "ობოლი" აქტივობა დასაშვებია. გასწორება სავარჯიშო #11-ია.
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // "ჩემი ვადაგადაცილებული დავალებები" — ყველაზე ხშირი dashboard query (სავარჯიშო #10).
+  @@index([ownerId, dueAt])
+  @@index([dealId])
+  @@index([companyId])
+  @@index([contactId])
+}
