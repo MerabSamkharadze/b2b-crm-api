@@ -157,16 +157,18 @@ npm run test:watch   # ტესტები watch რეჟიმში
 
 ## 6. ხშირი პრობლემები
 
-| სიმპტომი                                            | მიზეზი და გამოსავალი                                               |
-| --------------------------------------------------- | ------------------------------------------------------------------ |
-| `Can't reach database server`                       | სერვისი გამორთულია → ნაბიჯი 1                                      |
-| `P1012: url is no longer supported`                 | Prisma 7-ში `url` schema-ში აკრძალულია — ის `prisma.config.ts`-შია |
-| `permission denied to create database`              | `crm_user`-ს `CREATEDB` არ აქვს → `ALTER ROLE crm_user CREATEDB;`  |
-| `Cannot find module './generated/prisma/client.js'` | `npx prisma generate` (ან `npm install`)                           |
-| `npm i prisma` აყენებს 8.0.0-rc-ს                   | ვერსიები `--save-exact`-ით არის pin-ული — არ მოხსნა                |
-| 403 ყველგან ADMIN-ითაც                              | ეს ნორმაა სავარჯიშო #03-მდე (role იერარქია ჯერ არ არის)            |
-| ყველა როლი ერთსა და იმავეს ხედავს                   | ეს ნორმაა სავარჯიშო #04-მდე (fail-closed stub)                     |
-| 501 Not Implemented                                 | შეგნებული stub — იხ. `docs/EXERCISES.md`                           |
+| სიმპტომი                                                                  | მიზეზი და გამოსავალი                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Can't reach database server`                                             | სერვისი გამორთულია → ნაბიჯი 1                                                                                                                                                                                                           |
+| `P1012: url is no longer supported`                                       | Prisma 7-ში `url` schema-ში აკრძალულია — ის `prisma.config.ts`-შია                                                                                                                                                                      |
+| `permission denied to create database`                                    | `crm_user`-ს `CREATEDB` არ აქვს → `ALTER ROLE crm_user CREATEDB;`                                                                                                                                                                       |
+| `Cannot find module './generated/prisma/client.js'`                       | `npx prisma generate` (ან `npm install`)                                                                                                                                                                                                |
+| `npm i prisma` აყენებს 8.0.0-rc-ს                                         | ვერსიები `--save-exact`-ით არის pin-ული — არ მოხსნა                                                                                                                                                                                     |
+| 403 ყველგან ADMIN-ითაც                                                    | ეს ნორმაა სავარჯიშო #03-მდე (role იერარქია ჯერ არ არის)                                                                                                                                                                                 |
+| ყველა როლი ერთსა და იმავეს ხედავს                                         | ეს ნორმაა სავარჯიშო #04-მდე (fail-closed stub)                                                                                                                                                                                          |
+| 501 Not Implemented                                                       | შეგნებული stub — იხ. `docs/EXERCISES.md`                                                                                                                                                                                                |
+| 429 Too Many Requests                                                     | rate limit: register 5/წთ, login 10/წთ. Swagger-ში ზედიზედ ტესტირებისას ნორმაა — დაელოდე წუთს                                                                                                                                           |
+| `Cannot read properties of undefined (reading 'get')` `tsx`-ით გაშვებისას | **აპლიკაცია `tsx`-ით არ ეშვება.** esbuild `emitDecoratorMetadata`-ს არ აკეთებს, ამის გარეშე NestJS-ის DI ვერ ხედავს, რომელი ტიპი რომელ პარამეტრშია. გამოიყენე `npm run start:dev` (tsc). `tsx` მხოლოდ seed-ისთვისაა, სადაც DI არ გვაქვს |
 
 ---
 
