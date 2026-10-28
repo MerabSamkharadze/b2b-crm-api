@@ -113,7 +113,13 @@ export class AuthService {
     );
   }
 
-  /** TODO: [Merab] #09b — logout: refresh token-ის hash-ის გასუფთავება. */
+  /**
+   * TODO: [Merab] #09b — logout
+   *
+   * GOAL:      გაასუფთავე hashedRefreshToken (null) → refresh token უქმდება.
+   * HINT:      `this.users.setRefreshTokenHash(userId, null)` უკვე არსებობს.
+   * DONE WHEN: logout-ის შემდეგ იმავე refresh token-ით refresh ჩავარდება
+   */
   async logout(_userId: string): Promise<void> {
     throw new NotImplementedException(
       'სავარჯიშო #09: logout — hashedRefreshToken უნდა გასუფთავდეს',

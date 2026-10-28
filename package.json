@@ -25,7 +25,7 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
-    "todos": "grep -rn 'TODO: \\[Merab\\]' src | sort"
+    "todos": "grep -rn 'TODO: \\[Merab\\]' src | sort -t'#' -k2 -n"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
